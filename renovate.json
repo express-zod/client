@@ -1,0 +1,21 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits", ":dependencyDashboard"],
+  "timezone": "Asia/Shanghai",
+  "schedule": ["before 6am on monday"],
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Group devDependency bumps into one PR; they cannot break consumers.",
+      "matchDepTypes": ["devDependencies"],
+      "groupName": "devDependencies"
+    },
+    {
+      "description": "Platform binaries shipped via postinstall need allow-listing in pnpm-workspace.yaml. Never automerge them.",
+      "matchPackageNames": ["esbuild", "@esbuild/*", "vite", "vitest", "tsdown"],
+      "automerge": false
+    }
+  ]
+}
