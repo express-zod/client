@@ -1,7 +1,2 @@
-export interface Greeting {
-  name: string
-}
-
-export function greet({ name }: Greeting): string {
-  return `Hello, ${name}!`
-}
+export { createClient } from './client.ts'
+export type { Client } from './client.ts'

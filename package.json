@@ -41,8 +41,11 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
+    "@types/express": "^5.0.6",
     "@types/node": "^26.6.3",
     "@vitest/coverage-v8": "5.0.3",
+    "express": "^5.3.0",
+    "express-zod": "latest",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "oxfmt": "^0.71.0",
@@ -50,7 +53,8 @@
     "publint": "^0.3.24",
     "tsdown": "^0.23.0",
     "typescript": "^5.9.3",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "zod": "^4.6.7"
   },
   "lint-staged": {
     "*.{js,mjs,cjs,ts,mts,cts}": [

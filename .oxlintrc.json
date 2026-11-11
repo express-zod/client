@@ -21,6 +21,12 @@
       "rules": {
         "no-console": "off"
       }
+    },
+    {
+      "files": ["__test__/**/*.test-d.ts"],
+      "rules": {
+        "vitest/expect-expect": "off"
+      }
     }
   ],
   "ignorePatterns": ["dist", "coverage", "node_modules"]
