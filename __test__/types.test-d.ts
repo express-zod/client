@@ -3,7 +3,7 @@ import type { RoutesOf } from 'express-zod'
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 
-import { createClient } from '../src/index.ts'
+import { type ClientError, createClient } from '../src/index.ts'
 
 const app = createApp()
   .get('/api', () => {})
@@ -143,7 +143,7 @@ describe('createClient paths', () => {
 
   it('strips multi-segment host pathnames', () => {
     const v1 = createClient('https://example.com/api/v1').as<RoutesOf<typeof app>>()
-    expectTypeOf(v1.get('/status')).toEqualTypeOf<Promise<unknown>>()
+    expectTypeOf(v1.get('/status')).resolves.toEqualTypeOf<unknown>()
   })
 
   it('does not strip when the host is not a literal', () => {
@@ -155,15 +155,15 @@ describe('createClient paths', () => {
 
 describe('createClient all and wildcards', () => {
   it('exposes the all method', () => {
-    expectTypeOf(client.all('/ping')).toEqualTypeOf<Promise<unknown>>()
+    expectTypeOf(client.all('/ping')).resolves.toEqualTypeOf<unknown>()
     // @ts-expect-error the prefix is stripped
     client.all('/api/ping')
   })
 
   it('infers wildcard params', () => {
-    expectTypeOf(client.get('/files/*path', { params: { path: ['a', 'b'] } })).toEqualTypeOf<
-      Promise<{ size: number }>
-    >()
+    expectTypeOf(
+      client.get('/files/*path', { params: { path: ['a', 'b'] } }),
+    ).resolves.toEqualTypeOf<{ size: number }>()
   })
 
   it('requires wildcard params', () => {
@@ -177,19 +177,19 @@ describe('createClient all and wildcards', () => {
   })
 
   it('accepts single and multiple wildcard segments', () => {
-    expectTypeOf(client.get('/files/*path', { params: { path: ['a'] } })).toEqualTypeOf<
-      Promise<{ size: number }>
-    >()
+    expectTypeOf(client.get('/files/*path', { params: { path: ['a'] } })).resolves.toEqualTypeOf<{
+      size: number
+    }>()
 
-    expectTypeOf(client.get('/files/*path', { params: { path: ['a', 'b'] } })).toEqualTypeOf<
-      Promise<{ size: number }>
-    >()
+    expectTypeOf(
+      client.get('/files/*path', { params: { path: ['a', 'b'] } }),
+    ).resolves.toEqualTypeOf<{ size: number }>()
 
     expectTypeOf(
       client.get('/files/:bucket/*path', {
         params: { bucket: 'b', path: ['a', 'b', 'c'] },
       }),
-    ).toEqualTypeOf<Promise<{ size: number }>>()
+    ).resolves.toEqualTypeOf<{ size: number }>()
   })
 
   it('infers named params alongside wildcards', () => {
@@ -197,7 +197,7 @@ describe('createClient all and wildcards', () => {
       client.get('/files/:bucket/*path', {
         params: { bucket: 'b', path: ['a', 'b'] },
       }),
-    ).toEqualTypeOf<Promise<{ size: number }>>()
+    ).resolves.toEqualTypeOf<{ size: number }>()
 
     // @ts-expect-error bucket is required
     client.get('/files/:bucket/*path', { params: { path: ['a'] } })
@@ -236,9 +236,9 @@ describe('createClient args', () => {
   })
 
   it('infers params from the path without a schema', () => {
-    expectTypeOf(client.post('/teams/:teamId/members', { params: { teamId: 't' } })).toEqualTypeOf<
-      Promise<unknown>
-    >()
+    expectTypeOf(
+      client.post('/teams/:teamId/members', { params: { teamId: 't' } }),
+    ).resolves.toEqualTypeOf<unknown>()
     // @ts-expect-error teamId is required
     client.post('/teams/:teamId/members')
   })
@@ -248,7 +248,7 @@ describe('createClient args', () => {
       client.get('/orgs/:orgId/users/:userId', {
         params: { orgId: 1, userId: 'u' },
       }),
-    ).toEqualTypeOf<Promise<{ ok: boolean }>>()
+    ).resolves.toEqualTypeOf<{ ok: boolean }>()
 
     // @ts-expect-error orgId is a number per the schema
     client.get('/orgs/:orgId/users/:userId', { params: { orgId: '1', userId: 'u' } })
@@ -266,31 +266,31 @@ describe('createClient args', () => {
 
 describe('createClient responses', () => {
   it('returns unknown without a response schema', () => {
-    expectTypeOf(client.get('/')).toEqualTypeOf<Promise<unknown>>()
+    expectTypeOf(client.get('/')).resolves.toEqualTypeOf<unknown>()
   })
 
   it('uses the response schema body', () => {
-    expectTypeOf(client.get('/users', { query: { page: 1 } })).toEqualTypeOf<
-      Promise<{ items: string[] }>
-    >()
+    expectTypeOf(client.get('/users', { query: { page: 1 } })).resolves.toEqualTypeOf<{
+      items: string[]
+    }>()
   })
 
   it('returns the successful response body directly', () => {
-    expectTypeOf(client.get('/users/:id', { params: { id: '1' } })).toEqualTypeOf<
-      Promise<{ id: string }>
-    >()
+    expectTypeOf(client.get('/users/:id', { params: { id: '1' } })).resolves.toEqualTypeOf<{
+      id: string
+    }>()
   })
 
   it('maps no-body statuses to undefined', () => {
-    expectTypeOf(client.delete('/sessions/:id', { params: { id: '1' } })).toEqualTypeOf<
-      Promise<undefined>
-    >()
+    expectTypeOf(
+      client.delete('/sessions/:id', { params: { id: '1' } }),
+    ).resolves.toEqualTypeOf<undefined>()
   })
 
   it('excludes failure response bodies', () => {
-    expectTypeOf(client.get('/users/:id', { params: { id: '1' } })).toEqualTypeOf<
-      Promise<{ id: string }>
-    >()
+    expectTypeOf(client.get('/users/:id', { params: { id: '1' } })).resolves.toEqualTypeOf<{
+      id: string
+    }>()
   })
 })
 
@@ -314,5 +314,31 @@ describe('createClient request options', () => {
   it('rejects unknown options', () => {
     // @ts-expect-error unknown option
     client.get('/', { unknown: true })
+  })
+})
+
+describe('createClient error types', () => {
+  it('types catch errors as ClientError', () => {
+    client.get('/users/:id', { params: { id: '1' } }).catch((error) => {
+      expectTypeOf(error).toEqualTypeOf<ClientError<404, { message: string }>>()
+      expectTypeOf(error.status).toEqualTypeOf<404>()
+      expectTypeOf(error.body).toEqualTypeOf<{ message: string }>()
+    })
+  })
+
+  it('falls back to ClientError without an error schema', () => {
+    client.get('/health').catch((error) => {
+      expectTypeOf(error).toEqualTypeOf<ClientError>()
+    })
+  })
+
+  it('types then rejection handlers', () => {
+    client.get('/users/:id', { params: { id: '1' } }).then(
+      (body) => body,
+      (error) => {
+        expectTypeOf(error).toEqualTypeOf<ClientError<404, { message: string }>>()
+        return undefined
+      },
+    )
   })
 })

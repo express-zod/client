@@ -64,8 +64,26 @@ export type SuccessStatusCode = 200 | 201 | 202 | 203 | 204 | 205 | 206 | 207 | 
 
 export type SuccessKeysOf<Response> = Extract<keyof Response, SuccessStatusCode>
 
+export type ErrorKeysOf<Response> = Exclude<keyof Response, SuccessStatusCode>
+
 export type ResponseOf<Definition> = Definition extends { response: infer Response }
   ? keyof Response extends never
     ? unknown
     : Response[SuccessKeysOf<Response>]
   : never
+
+export type ErrorResponseOf<Definition> = Definition extends { response: infer Response }
+  ? {
+      [Code in ErrorKeysOf<Response>]: { status: Code; body: Response[Code] }
+    }[ErrorKeysOf<Response>]
+  : never
+
+export type ErrorStatusOf<Definition> =
+  ErrorResponseOf<Definition> extends {
+    status: infer Status extends number
+  }
+    ? Status
+    : never
+
+export type ErrorBodyOf<Definition> =
+  ErrorResponseOf<Definition> extends { body: infer Body } ? Body : never

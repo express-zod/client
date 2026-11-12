@@ -1,6 +1,16 @@
 import { ClientError } from './error.ts'
 import type { HostPrefix, StripPrefix } from './host.ts'
-import type { ArgsOf, ArgsTuple, MethodsOf, PathsOf, ResponseOf, RouteAt } from './types.ts'
+import type {
+  ArgsOf,
+  ArgsTuple,
+  ErrorBodyOf,
+  ErrorResponseOf,
+  ErrorStatusOf,
+  MethodsOf,
+  PathsOf,
+  ResponseOf,
+  RouteAt,
+} from './types.ts'
 
 const METHODS = new Set([
   'all',
@@ -65,11 +75,29 @@ type ArgsWithOptions<Args> =
       : [...Tuple, options?: RequestOptions]
     : never
 
+type ClientErrorOf<Definition> = [ErrorResponseOf<Definition>] extends [never]
+  ? ClientError
+  : ClientError<ErrorStatusOf<Definition>, ErrorBodyOf<Definition>>
+
+export interface ClientPromise<T, E extends ClientError = ClientError> extends Promise<T> {
+  then<TResult1 = T, TResult2 = never>(
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: E) => TResult2 | PromiseLike<TResult2>) | null,
+  ): ClientPromise<TResult1 | TResult2, E>
+  catch<TResult = never>(
+    onrejected?: ((reason: E) => TResult | PromiseLike<TResult>) | null,
+  ): ClientPromise<T | TResult, E>
+  finally(onfinally?: (() => void) | null): ClientPromise<T, E>
+}
+
 type ClientOf<Routes> = {
   [Method in MethodsOf<Routes>]: <Path extends PathsOf<Routes, Method>>(
     path: Path,
     ...args: ArgsWithOptions<ArgsOf<RouteAt<Routes, `${Method} ${Path}`>>>
-  ) => Promise<ResponseOf<RouteAt<Routes, `${Method} ${Path}`>>>
+  ) => ClientPromise<
+    ResponseOf<RouteAt<Routes, `${Method} ${Path}`>>,
+    ClientErrorOf<RouteAt<Routes, `${Method} ${Path}`>>
+  >
 }
 
 type StripKey<Key, Prefix extends string> = Key extends `${infer Method} ${infer Path}`
