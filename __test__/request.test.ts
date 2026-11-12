@@ -107,6 +107,7 @@ describe('createClient requests', () => {
 
     expect(error).toBeInstanceOf(ClientError)
     expect(error).toMatchObject({ status: 404, body: { message: 'missing' } })
+    expect((error as ClientError).response?.status).toBe(404)
   })
 
   it('returns undefined for no-content responses', async () => {
@@ -208,5 +209,144 @@ describe('createClient requests', () => {
 
   it('ignores unknown properties', () => {
     expect((client as unknown as Record<string, unknown>).unknown).toBeUndefined()
+  })
+})
+
+describe('createClient options', () => {
+  it('uses a custom fetch implementation', async () => {
+    const customFetch = vi.fn<typeof fetch>().mockResolvedValue(json({ id: '1' }))
+    const custom = createClient('http://example.com/api', { fetch: customFetch }).as<
+      RoutesOf<typeof app>
+    >()
+
+    await custom.get('/users/:id', { params: { id: '1' } })
+
+    expect(customFetch).toHaveBeenCalledOnce()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('merges default headers from an async factory', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 201 }))
+    const custom = createClient('http://example.com/api', {
+      headers: async () => ({ 'x-token': 'abc' }),
+    }).as<RoutesOf<typeof app>>()
+
+    await custom.post('/users', {
+      body: { name: 'a' },
+      headers: { authorization: 'Bearer x' },
+    })
+
+    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers)
+    expect(headers.get('x-token')).toBe('abc')
+    expect(headers.get('authorization')).toBe('Bearer x')
+  })
+
+  it('merges default and per-request init', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 201 }))
+    const custom = createClient('http://example.com/api', {
+      init: { credentials: 'include', cache: 'no-store' },
+    }).as<RoutesOf<typeof app>>()
+
+    await custom.post(
+      '/users',
+      { body: { name: 'a' }, headers: { authorization: 'Bearer x' } },
+      { init: { cache: 'reload' } },
+    )
+
+    const init = fetchMock.mock.calls[0]?.[1]
+    expect(init?.credentials).toBe('include')
+    expect(init?.cache).toBe('reload')
+  })
+
+  it('forwards an abort signal', async () => {
+    fetchMock.mockResolvedValue(json({ id: '1' }))
+    const controller = new AbortController()
+
+    await client.get('/users/:id', { params: { id: '1' } }, { signal: controller.signal })
+
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(controller.signal)
+  })
+
+  it('applies a timeout', async () => {
+    fetchMock.mockResolvedValue(json({ id: '1' }))
+    const custom = createClient('http://example.com/api', { timeout: 1000 }).as<
+      RoutesOf<typeof app>
+    >()
+
+    await custom.get('/users/:id', { params: { id: '1' } })
+
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('accepts options for routes without args', async () => {
+    fetchMock.mockResolvedValue(new Response('1.0.0'))
+
+    await client.get('/version', { timeout: 1000 })
+
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('merges per-request headers', async () => {
+    fetchMock.mockResolvedValue(json({ id: '1' }))
+
+    await client.get('/users/:id', { params: { id: '1' } }, { headers: { 'x-trace': '1' } })
+
+    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers)
+    expect(headers.get('x-trace')).toBe('1')
+  })
+
+  it('returns the failure body when throwOnError is false', async () => {
+    fetchMock.mockResolvedValue(json({ message: 'missing' }, 404))
+    const custom = createClient('http://example.com/api', { throwOnError: false }).as<
+      RoutesOf<typeof app>
+    >()
+
+    await expect(custom.get('/users/:id', { params: { id: '1' } })).resolves.toEqual({
+      message: 'missing',
+    })
+  })
+
+  it('accepts throwOnError per request', async () => {
+    fetchMock.mockResolvedValue(json({ message: 'missing' }, 404))
+
+    await expect(
+      client.get('/users/:id', { params: { id: '1' } }, { throwOnError: false }),
+    ).resolves.toEqual({ message: 'missing' })
+  })
+
+  it('uses a custom success predicate', async () => {
+    fetchMock.mockResolvedValue(json({ message: 'not found' }, 404))
+    const custom = createClient('http://example.com/api', {
+      isSuccess: (status) => status < 500,
+    }).as<RoutesOf<typeof app>>()
+
+    await expect(custom.get('/users/:id', { params: { id: '1' } })).resolves.toEqual({
+      message: 'not found',
+    })
+  })
+
+  it('runs request, response, and error hooks', async () => {
+    const events: string[] = []
+    fetchMock.mockResolvedValue(json({ message: 'missing' }, 404))
+    const custom = createClient('http://example.com/api', {
+      onRequest: ({ url, init }) => {
+        events.push(`request:${url}:${init.method}`)
+      },
+      onResponse: (response) => {
+        events.push(`response:${response.status}`)
+      },
+      onError: (error) => {
+        events.push(`error:${error.status}:${error.response?.status}`)
+      },
+    }).as<RoutesOf<typeof app>>()
+
+    await expect(custom.get('/users/:id', { params: { id: '1' } })).rejects.toBeInstanceOf(
+      ClientError,
+    )
+    expect(events).toEqual([
+      'request:http://example.com/api/users/1:GET',
+      'response:404',
+      'error:404:404',
+    ])
   })
 })

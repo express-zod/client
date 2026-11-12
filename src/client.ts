@@ -16,11 +16,38 @@ const METHODS = new Set([
   'trace',
 ])
 
+type RequestInitOptions = Omit<RequestInit, 'body' | 'headers' | 'method' | 'signal'>
+
 type RequestArgs = {
   params?: Record<string, unknown>
   query?: Record<string, unknown>
   body?: unknown
   headers?: Record<string, unknown>
+}
+
+export type HeadersInput =
+  | Headers
+  | [string, string][]
+  | Record<string, string | string[] | undefined | null>
+
+export type RequestOptions = {
+  headers?: HeadersInput
+  init?: RequestInitOptions
+  signal?: AbortSignal
+  timeout?: number
+  throwOnError?: boolean
+}
+
+export type ClientOptions = {
+  fetch?: typeof fetch
+  headers?: HeadersInput | (() => HeadersInput | Promise<HeadersInput>)
+  init?: RequestInitOptions
+  timeout?: number
+  throwOnError?: boolean
+  isSuccess?: (status: number) => boolean
+  onRequest?: (request: { url: string; init: RequestInit }) => void | Promise<void>
+  onResponse?: (response: Response) => void | Promise<void>
+  onError?: (error: ClientError) => void | Promise<void>
 }
 
 type ClientRoutes<T, Prefix extends string> = {
@@ -31,10 +58,17 @@ type ClientRoutes<T, Prefix extends string> = {
   ]: T[Key]
 }
 
+type ArgsWithOptions<Args> =
+  ArgsTuple<Args> extends infer Tuple extends unknown[]
+    ? Tuple extends []
+      ? [options?: RequestOptions]
+      : [...Tuple, options?: RequestOptions]
+    : never
+
 type ClientOf<Routes> = {
   [Method in MethodsOf<Routes>]: <Path extends PathsOf<Routes, Method>>(
     path: Path,
-    ...args: ArgsTuple<ArgsOf<RouteAt<Routes, `${Method} ${Path}`>>>
+    ...args: ArgsWithOptions<ArgsOf<RouteAt<Routes, `${Method} ${Path}`>>>
   ) => Promise<ResponseOf<RouteAt<Routes, `${Method} ${Path}`>>>
 }
 
@@ -103,16 +137,36 @@ function serializeQuery(query: RequestArgs['query']) {
   return serialized ? `?${serialized}` : ''
 }
 
-function serializeHeaders(headers: RequestArgs['headers']) {
+function mergeHeaders(...sources: (HeadersInput | undefined)[]) {
   const result = new Headers()
-  if (!headers) return result
 
-  for (const [key, value] of Object.entries(headers)) {
-    if (value === undefined || value === null) continue
-    result.set(key, Array.isArray(value) ? value.join(', ') : String(value))
+  for (const source of sources) {
+    if (!source) continue
+
+    if (source instanceof Headers) {
+      source.forEach((value, key) => result.set(key, value))
+      continue
+    }
+
+    if (Array.isArray(source)) {
+      for (const [key, value] of source) result.set(key, value)
+      continue
+    }
+
+    for (const [key, value] of Object.entries(source)) {
+      if (value === undefined || value === null) continue
+      result.set(key, Array.isArray(value) ? value.join(', ') : String(value))
+    }
   }
 
   return result
+}
+
+function createSignal(signal: AbortSignal | undefined, timeout: number | undefined) {
+  if (timeout === undefined) return signal
+
+  const timeoutSignal = AbortSignal.timeout(timeout)
+  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
 }
 
 async function parseBody(response: Response): Promise<unknown> {
@@ -129,31 +183,73 @@ async function request(
   host: string,
   method: string,
   path: string,
-  args: RequestArgs = {},
+  args: RequestArgs,
+  options: RequestOptions,
+  config: ClientOptions,
 ): Promise<unknown> {
-  const headers = serializeHeaders(args.headers)
-  const body = args.body === undefined || args.body === null ? undefined : JSON.stringify(args.body)
+  const headers = mergeHeaders(
+    typeof config.headers === 'function' ? await config.headers() : config.headers,
+    args.headers as HeadersInput | undefined,
+    options.headers,
+  )
 
+  const body = args.body === undefined || args.body === null ? undefined : JSON.stringify(args.body)
   if (body !== undefined && !headers.has('content-type')) {
     headers.set('content-type', 'application/json')
   }
 
-  const response = await fetch(
-    `${normalizeHost(host)}${resolvePath(path, args.params)}${serializeQuery(args.query)}`,
-    {
+  const input = {
+    url: `${normalizeHost(host)}${resolvePath(path, args.params)}${serializeQuery(args.query)}`,
+    init: {
+      ...config.init,
+      ...options.init,
       method: method === 'all' ? 'GET' : method.toUpperCase(),
       headers,
       body,
+      signal: createSignal(options.signal, options.timeout ?? config.timeout),
     },
-  )
+  }
+
+  await config.onRequest?.(input)
+
+  const response = await (config.fetch ?? fetch)(input.url, input.init)
+  await config.onResponse?.(response)
 
   const payload = await parseBody(response)
-  if (!response.ok) throw new ClientError(response.status, payload)
+  const success = config.isSuccess
+    ? config.isSuccess(response.status)
+    : response.status >= 200 && response.status < 300
+
+  if (!success) {
+    const error = new ClientError(response.status, payload, response)
+    await config.onError?.(error)
+    if (options.throwOnError ?? config.throwOnError ?? true) throw error
+  }
 
   return payload
 }
 
-export function createClient<Host extends string>(host: Host) {
+function isRequestOptions(value: unknown): value is RequestOptions {
+  if (typeof value !== 'object' || value === null) return false
+
+  return 'signal' in value || 'timeout' in value || 'init' in value || 'throwOnError' in value
+}
+
+function splitArgs(rest: unknown[]) {
+  if (rest.length > 1) {
+    return {
+      args: (rest[0] ?? {}) as RequestArgs,
+      options: (rest[1] ?? {}) as RequestOptions,
+    }
+  }
+
+  const [value] = rest
+  if (isRequestOptions(value)) return { args: {}, options: value }
+
+  return { args: (value ?? {}) as RequestArgs, options: {} }
+}
+
+export function createClient<Host extends string>(host: Host, config: ClientOptions = {}) {
   return {
     as: <T extends object>(): Client<T, HostPrefix<Host>> => {
       return new Proxy({} as Client<T, HostPrefix<Host>>, {
@@ -162,7 +258,10 @@ export function createClient<Host extends string>(host: Host) {
             return Reflect.get(target, property, receiver)
           }
 
-          return (path: string, args?: RequestArgs) => request(host, property, path, args)
+          return (path: string, ...rest: unknown[]) => {
+            const { args, options } = splitArgs(rest)
+            return request(host, property, path, args, options, config)
+          }
         },
       })
     },

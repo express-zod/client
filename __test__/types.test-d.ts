@@ -210,8 +210,9 @@ describe('createClient all and wildcards', () => {
 
 describe('createClient args', () => {
   it('omits args when a route takes none', () => {
+    client.get('/', { timeout: 1000 })
     // @ts-expect-error the root route takes no args
-    client.get('/', {})
+    client.get('/', { params: {} })
   })
 
   it('requires args with a required field', () => {
@@ -290,5 +291,28 @@ describe('createClient responses', () => {
     expectTypeOf(client.get('/users/:id', { params: { id: '1' } })).toEqualTypeOf<
       Promise<{ id: string }>
     >()
+  })
+})
+
+describe('createClient request options', () => {
+  it('accepts options for routes without args', () => {
+    client.get('/', { timeout: 1000 })
+    client.all('/ping', { throwOnError: false })
+  })
+
+  it('accepts options after args', () => {
+    const controller = new AbortController()
+
+    client.get('/users/:id', { params: { id: '1' } }, { signal: controller.signal })
+    client.get('/users/:id', { params: { id: '1' } }, { headers: { authorization: 'x' } })
+  })
+
+  it('accepts options after optional args', () => {
+    client.get('/search', undefined, { timeout: 1000 })
+  })
+
+  it('rejects unknown options', () => {
+    // @ts-expect-error unknown option
+    client.get('/', { unknown: true })
   })
 })
