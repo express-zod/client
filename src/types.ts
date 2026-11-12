@@ -60,10 +60,12 @@ export type ArgsOf<Definition> = Definition extends {
     >
   : never
 
+export type SuccessStatusCode = 200 | 201 | 202 | 203 | 204 | 205 | 206 | 207 | 208 | 226
+
+export type SuccessKeysOf<Response> = Extract<keyof Response, SuccessStatusCode>
+
 export type ResponseOf<Definition> = Definition extends { response: infer Response }
   ? keyof Response extends never
     ? unknown
-    : {
-        [Code in keyof Response]: { status: Code; body: Response[Code] }
-      }[keyof Response]
+    : Response[SuccessKeysOf<Response>]
   : never

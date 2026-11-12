@@ -162,7 +162,7 @@ describe('createClient all and wildcards', () => {
 
   it('infers wildcard params', () => {
     expectTypeOf(client.get('/files/*path', { params: { path: ['a', 'b'] } })).toEqualTypeOf<
-      Promise<{ status: 200; body: { size: number } }>
+      Promise<{ size: number }>
     >()
   })
 
@@ -178,18 +178,18 @@ describe('createClient all and wildcards', () => {
 
   it('accepts single and multiple wildcard segments', () => {
     expectTypeOf(client.get('/files/*path', { params: { path: ['a'] } })).toEqualTypeOf<
-      Promise<{ status: 200; body: { size: number } }>
+      Promise<{ size: number }>
     >()
 
     expectTypeOf(client.get('/files/*path', { params: { path: ['a', 'b'] } })).toEqualTypeOf<
-      Promise<{ status: 200; body: { size: number } }>
+      Promise<{ size: number }>
     >()
 
     expectTypeOf(
       client.get('/files/:bucket/*path', {
         params: { bucket: 'b', path: ['a', 'b', 'c'] },
       }),
-    ).toEqualTypeOf<Promise<{ status: 200; body: { size: number } }>>()
+    ).toEqualTypeOf<Promise<{ size: number }>>()
   })
 
   it('infers named params alongside wildcards', () => {
@@ -197,7 +197,7 @@ describe('createClient all and wildcards', () => {
       client.get('/files/:bucket/*path', {
         params: { bucket: 'b', path: ['a', 'b'] },
       }),
-    ).toEqualTypeOf<Promise<{ status: 200; body: { size: number } }>>()
+    ).toEqualTypeOf<Promise<{ size: number }>>()
 
     // @ts-expect-error bucket is required
     client.get('/files/:bucket/*path', { params: { path: ['a'] } })
@@ -247,7 +247,7 @@ describe('createClient args', () => {
       client.get('/orgs/:orgId/users/:userId', {
         params: { orgId: 1, userId: 'u' },
       }),
-    ).toEqualTypeOf<Promise<{ status: 201; body: { ok: boolean } }>>()
+    ).toEqualTypeOf<Promise<{ ok: boolean }>>()
 
     // @ts-expect-error orgId is a number per the schema
     client.get('/orgs/:orgId/users/:userId', { params: { orgId: '1', userId: 'u' } })
@@ -270,27 +270,25 @@ describe('createClient responses', () => {
 
   it('uses the response schema body', () => {
     expectTypeOf(client.get('/users', { query: { page: 1 } })).toEqualTypeOf<
-      Promise<{ status: 200; body: { items: string[] } }>
+      Promise<{ items: string[] }>
     >()
   })
 
-  it('expands status codes into a union', () => {
+  it('returns the successful response body directly', () => {
     expectTypeOf(client.get('/users/:id', { params: { id: '1' } })).toEqualTypeOf<
-      Promise<{ status: 200; body: { id: string } } | { status: 404; body: { message: string } }>
+      Promise<{ id: string }>
     >()
   })
 
   it('maps no-body statuses to undefined', () => {
     expectTypeOf(client.delete('/sessions/:id', { params: { id: '1' } })).toEqualTypeOf<
-      Promise<{ status: 204; body: undefined }>
+      Promise<undefined>
     >()
   })
 
-  it('narrows the body by status', () => {
-    client.get('/users/:id', { params: { id: '1' } }).then((res) => {
-      if (res.status === 200) {
-        expectTypeOf(res.body).toEqualTypeOf<{ id: string }>()
-      }
-    })
+  it('excludes failure response bodies', () => {
+    expectTypeOf(client.get('/users/:id', { params: { id: '1' } })).toEqualTypeOf<
+      Promise<{ id: string }>
+    >()
   })
 })
