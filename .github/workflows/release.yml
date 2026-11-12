@@ -9,8 +9,8 @@ permissions:
   id-token: write
 
 jobs:
-  publish:
-    name: publish to npm
+  release:
+    name: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +42,7 @@ jobs:
       - run: pnpm check:package
 
       - run: pnpm publish --access public --provenance --no-git-checks
+        if: ${{ vars.PUBLISH_NPM == 'true' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

@@ -1,5 +1,5 @@
 {
-  "name": "@express-zod/client",
+  "name": "@megumichai/express-zod-client",
   "version": "0.0.1",
   "description": "End-to-end type-safe client for express-zod.",
   "keywords": [
