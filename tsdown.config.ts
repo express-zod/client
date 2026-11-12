@@ -17,10 +17,13 @@ function formatDist() {
 }
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: ['src/index.ts', 'src/adopters/react.ts', 'src/adopters/vue.ts'],
   outDir,
   format: ['esm', 'cjs'],
   platform: 'node',
+  deps: {
+    neverBundle: ['vue'],
+  },
   target: 'es2023',
   fixedExtension: true,
   dts: true,

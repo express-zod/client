@@ -22,6 +22,6 @@
     "declaration": true,
     "noEmit": true
   },
-  "include": ["src", "__test__", "vitest.config.ts"],
+  "include": ["src", "__test__", "vitest.config.ts", "tsdown.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

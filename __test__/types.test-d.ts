@@ -3,6 +3,8 @@ import type { RoutesOf } from 'express-zod'
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 
+import { useClient as useReactClient } from '../src/adopters/react.ts'
+import { useClient } from '../src/adopters/vue.ts'
 import { type ClientError, createClient } from '../src/index.ts'
 
 const app = createApp()
@@ -340,5 +342,29 @@ describe('createClient error types', () => {
         return undefined
       },
     )
+  })
+})
+
+describe('vue useClient types', () => {
+  it('infers data, error, and status types', () => {
+    const state = useClient(() => client.get('/users/:id', { params: { id: '1' } }))
+
+    expectTypeOf(state.data.value).toEqualTypeOf<{ id: string } | undefined>()
+    expectTypeOf(state.error.value).toEqualTypeOf<
+      ClientError<404, { message: string }> | undefined
+    >()
+    expectTypeOf(state.pending.value).toEqualTypeOf<boolean>()
+    expectTypeOf(state.status.value).toEqualTypeOf<'idle' | 'pending' | 'success' | 'error'>()
+  })
+})
+
+describe('react useClient types', () => {
+  it('infers data, error, and status types', () => {
+    const state = useReactClient(() => client.get('/users/:id', { params: { id: '1' } }))
+
+    expectTypeOf(state.data).toEqualTypeOf<{ id: string } | undefined>()
+    expectTypeOf(state.error).toEqualTypeOf<ClientError<404, { message: string }> | undefined>()
+    expectTypeOf(state.pending).toEqualTypeOf<boolean>()
+    expectTypeOf(state.status).toEqualTypeOf<'idle' | 'pending' | 'success' | 'error'>()
   })
 })

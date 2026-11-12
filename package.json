@@ -24,11 +24,31 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/adopters/react.d.mts",
+        "default": "./dist/adopters/react.mjs"
+      },
+      "require": {
+        "types": "./dist/adopters/react.d.cts",
+        "default": "./dist/adopters/react.cjs"
+      }
+    },
+    "./vue": {
+      "import": {
+        "types": "./dist/adopters/vue.d.mts",
+        "default": "./dist/adopters/vue.mjs"
+      },
+      "require": {
+        "types": "./dist/adopters/vue.d.cts",
+        "default": "./dist/adopters/vue.cjs"
+      }
     }
   },
   "scripts": {
     "build": "tsdown",
-    "check:package": "publint && attw --pack .",
+    "check:package": "publint && attw --pack . --ignore-rules no-resolution",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -41,20 +61,40 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitest/coverage-v8": "5.0.3",
     "express": "^5.3.0",
     "express-zod": "latest",
     "husky": "^9.1.7",
+    "jsdom": "^31.0.0",
     "lint-staged": "^17.6.0",
     "oxfmt": "^0.71.0",
     "oxlint": "^1.86.0",
     "publint": "^0.3.24",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "tsdown": "^0.23.0",
     "typescript": "^5.9.3",
     "vitest": "^5.0.3",
+    "vue": "^3.5.45",
     "zod": "^4.6.7"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "vue": "^3.5.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
   },
   "lint-staged": {
     "*.{js,mjs,cjs,ts,mts,cts}": [
