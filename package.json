@@ -7,6 +7,10 @@
     "express-zod"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/express-zod/client.git"
+  },
   "files": [
     "dist"
   ],
